@@ -2,10 +2,19 @@ package models
 
 import (
 	"kancli/database"
+	"log"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+const DIVISOR int = 3
+
+const (
+	TODO status = iota
+	IN_PROGRESS
+	DONE
 )
 
 var (
@@ -25,6 +34,7 @@ type Task struct {
 	status      status
 	title       string
 	description string
+	id          int
 }
 
 func NewTask(status status, title, description string) Task {
@@ -74,15 +84,29 @@ func (m *Board) InitLists() {
 	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), m.width/DIVISOR, m.height)
 	defaultList.SetShowHelp(false)
 	m.lists = []list.Model{defaultList, defaultList, defaultList}
-
 	m.lists[TODO].Title = "To do"
-	m.lists[TODO].SetItems([]list.Item{})
-
 	m.lists[IN_PROGRESS].Title = "In Progress"
-	m.lists[IN_PROGRESS].SetItems([]list.Item{})
-
 	m.lists[DONE].Title = "Done"
-	m.lists[DONE].SetItems([]list.Item{})
+
+	rows, err := m.db.ReadAllTasks()
+	if err != nil {
+		log.Fatalf("failed to read tasks for database: %s", err)
+	}
+
+	for rows.Next() {
+		var id int
+		var status status
+		var title, description string
+		rows.Scan(&id, &title, &description, &status)
+		switch status {
+		case TODO:
+			m.lists[TODO].InsertItem(0, Task{id: id, title: title, description: description, status: status})
+		case IN_PROGRESS:
+			m.lists[IN_PROGRESS].InsertItem(0, Task{id: id, title: title, description: description, status: status})
+		case DONE:
+			m.lists[DONE].InsertItem(0, Task{id: id, title: title, description: description, status: status})
+		}
+	}
 }
 
 func (m Board) Init() tea.Cmd {
@@ -122,6 +146,10 @@ func (m Board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case Task:
 		task := msg
+		err := m.db.InsertTask(task.title, task.description, int(task.status))
+		if err != nil {
+			log.Fatalf("failed to insert task: %s", err)
+		}
 		return m, m.lists[task.status].InsertItem(0, task)
 	}
 
@@ -148,11 +176,18 @@ func (m *Board) MoveTask(dir int) tea.Msg {
 	selectedIndex := m.lists[m.focused].Index()
 	selectedTask, ok := m.lists[m.focused].SelectedItem().(Task)
 
+	var err error
 	if ok {
 		if dir > 0 {
 			selectedTask.Next()
+			err = m.db.UpdateTaskStatus(selectedTask.id, int(selectedTask.status))
 		} else {
 			selectedTask.Prev()
+			err = m.db.UpdateTaskStatus(selectedTask.id, int(selectedTask.status))
+		}
+
+		if err != nil {
+			log.Fatalf("failed to update task: %s", err)
 		}
 
 		m.lists[m.focused].RemoveItem(selectedIndex)
@@ -163,8 +198,19 @@ func (m *Board) MoveTask(dir int) tea.Msg {
 }
 
 func (m *Board) DeleteTask() tea.Msg {
+	selectedTask, ok := m.lists[m.focused].SelectedItem().(Task)
+	if !ok {
+		return ""
+	}
+
+	err := m.db.DeleteTask(selectedTask.id)
+	if err != nil {
+		log.Fatalf("failed to delete task: %s", err)
+	}
+
 	selectedIndex := m.lists[m.focused].Index()
 	m.lists[m.focused].RemoveItem(selectedIndex)
+
 	return nil
 }
 

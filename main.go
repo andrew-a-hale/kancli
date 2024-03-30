@@ -12,7 +12,7 @@ import (
 func main() {
 	db, err := database.Init("./data.db")
 	if err != nil {
-		log.Fatalf("unable to open database: %v", err)
+		log.Fatalf("unable to open database: %s", err)
 	}
 
 	model := *models.NewModel(db)

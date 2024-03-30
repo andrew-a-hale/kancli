@@ -5,16 +5,10 @@ import (
 	"kancli/database"
 )
 
+// Board Swimlane
 type status int
 
-const DIVISOR int = 3
-
-const (
-	TODO status = iota
-	IN_PROGRESS
-	DONE
-)
-
+// Model Management
 type view int
 
 var models []tea.Model
