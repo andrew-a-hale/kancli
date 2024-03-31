@@ -4,7 +4,7 @@ Kanban Board CLI built by building ontop of
 tutorial.
 
 # GIF
-<div>Generated with [VHS](https://github.com/charmbracelet/vhs).</div>
+<div>Generated with <a href="https://github.com/charmbracelet/vhs">VHS</a>.</div>
 <picture>
   <img width="600" src="./demo.gif">
 </picture>
