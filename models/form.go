@@ -15,17 +15,34 @@ var inputStyle = lipgloss.NewStyle().
 	BorderForeground(lipgloss.Color("62")).
 	Foreground(lipgloss.Color("241"))
 
+type mode int
+
+const (
+	NEW mode = iota
+	EDIT
+)
+
 type Form struct {
 	db          database.Database
+	name        string
 	focused     status
+	id          int
 	title       textinput.Model
 	description textarea.Model
 	width       int
 	height      int
+	mode        mode
 }
 
 func NewForm(db database.Database, focused status, width int, height int) *Form {
-	form := &Form{db: db, focused: focused, width: width, height: height}
+	form := &Form{
+		db:      db,
+		focused: focused,
+		width:   width,
+		height:  height,
+		name:    "Create New Task",
+		mode:    NEW,
+	}
 
 	form.title = textinput.New()
 	form.title.Placeholder = "New Task Name"
@@ -37,8 +54,31 @@ func NewForm(db database.Database, focused status, width int, height int) *Form 
 }
 
 func (m Form) NewTask() tea.Msg {
-	task := NewTask(m.focused, m.title.Value(), m.description.Value())
-	return task
+	return NewTask(m.focused, m.title.Value(), m.description.Value())
+}
+
+func NewFormWithTask(db database.Database, focused status, width int, height int, task Task) *Form {
+	form := &Form{
+		db:      db,
+		focused: focused,
+		id:      task.id,
+		width:   width,
+		height:  height,
+		name:    "Edit Task",
+		mode:    EDIT,
+	}
+
+	form.title = textinput.New()
+	form.title.SetValue(task.title)
+	form.title.Focus()
+
+	form.description = textarea.New()
+	form.description.SetValue(task.description)
+	return form
+}
+
+func (m Form) EditTask() tea.Msg {
+	return EditTask(m.id, m.focused, m.title.Value(), m.description.Value())
 }
 
 func (m Form) Init() tea.Cmd {
@@ -60,7 +100,12 @@ func (m Form) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, textarea.Blink
 			} else {
 				models[FORM] = m
-				return models[BOARD], m.NewTask
+				switch m.mode {
+				case NEW:
+					return models[BOARD], m.NewTask
+				case EDIT:
+					return models[BOARD], m.EditTask
+				}
 			}
 		}
 	}
@@ -78,6 +123,13 @@ func (m Form) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Form) View() string {
 	return lipgloss.JoinVertical(
 		lipgloss.Center,
+		lipgloss.Place(
+			m.width,
+			m.height/2-1,
+			lipgloss.Center,
+			lipgloss.Center,
+			m.name,
+		),
 		lipgloss.Place(
 			m.width,
 			m.height/2-1,

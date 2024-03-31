@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -44,21 +45,47 @@ CREATE TABLE IF NOT EXISTS TASKS (
 	return nil
 }
 
-func (db Database) InsertTask(title string, description string, status int) error {
+func (db Database) InsertTask(title string, description string, status int) (int, error) {
 	stmt, err := db.session.PrepareContext(
 		db.ctx,
 		`INSERT INTO TASKS (TITLE, DESCRIPTION, STATUS) VALUES (?, ?, ?)`,
 	)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
-	_, err = stmt.ExecContext(
+	res, err := stmt.ExecContext(
 		db.ctx,
 		title,
 		description,
 		status,
 	)
+	if err != nil {
+		return -1, err
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return -1, err
+	}
+
+	return int(id), nil
+}
+
+func (db Database) UpdateTask(id int, title string, description string) error {
+	if id == 0 {
+		return errors.New("invalid id")
+	}
+
+	stmt, err := db.session.PrepareContext(
+		db.ctx,
+		`UPDATE TASKS SET TITLE = ?, DESCRIPTION = ? WHERE id = ?`,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = stmt.ExecContext(db.ctx, title, description, id)
 	if err != nil {
 		return err
 	}
@@ -67,6 +94,10 @@ func (db Database) InsertTask(title string, description string, status int) erro
 }
 
 func (db Database) UpdateTaskStatus(id int, status int) error {
+	if id == 0 {
+		return errors.New("invalid id")
+	}
+
 	stmt, err := db.session.PrepareContext(
 		db.ctx,
 		`UPDATE TASKS SET STATUS = ? WHERE id = ?`,
@@ -84,6 +115,10 @@ func (db Database) UpdateTaskStatus(id int, status int) error {
 }
 
 func (db Database) DeleteTask(id int) error {
+	if id == 0 {
+		return errors.New("invalid id")
+	}
+
 	stmt, err := db.session.PrepareContext(
 		db.ctx,
 		`UPDATE TASKS SET DELETED_AT = CURRENT_TIMESTAMP WHERE id = ?`,

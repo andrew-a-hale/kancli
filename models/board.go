@@ -31,14 +31,21 @@ var (
 
 // CUSTOM ITEM TASK
 type Task struct {
+	id          int
+	index       int
 	status      status
 	title       string
 	description string
-	id          int
+}
+type TaskNew Task
+type TaskEdit Task
+
+func NewTask(status status, title, description string) TaskNew {
+	return TaskNew{title: title, description: description, status: status}
 }
 
-func NewTask(status status, title, description string) Task {
-	return Task{title: title, description: description, status: status}
+func EditTask(id int, status status, title, description string) TaskEdit {
+	return TaskEdit{id: id, title: title, description: description, status: status}
 }
 
 // implement the list.Item interface
@@ -93,18 +100,34 @@ func (m *Board) InitLists() {
 		log.Fatalf("failed to read tasks for database: %s", err)
 	}
 
+	todoIdx := 0
+	inProgressIdx := 0
+	doneIdx := 0
+	var task Task
 	for rows.Next() {
 		var id int
 		var status status
 		var title, description string
 		rows.Scan(&id, &title, &description, &status)
+		task = Task{
+			id:          id,
+			title:       title,
+			description: description,
+			status:      status,
+		}
 		switch status {
 		case TODO:
-			m.lists[TODO].InsertItem(0, Task{id: id, title: title, description: description, status: status})
+			task.index = todoIdx
+			m.lists[TODO].InsertItem(todoIdx, task)
+			todoIdx++
 		case IN_PROGRESS:
-			m.lists[IN_PROGRESS].InsertItem(0, Task{id: id, title: title, description: description, status: status})
+			task.index = inProgressIdx
+			m.lists[IN_PROGRESS].InsertItem(inProgressIdx, task)
+			inProgressIdx++
 		case DONE:
-			m.lists[DONE].InsertItem(0, Task{id: id, title: title, description: description, status: status})
+			task.index = doneIdx
+			m.lists[DONE].InsertItem(doneIdx, task)
+			doneIdx++
 		}
 	}
 }
@@ -139,18 +162,34 @@ func (m Board) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.MoveTask(-1)
 		case "d":
 			m.DeleteTask()
+		case "e":
+			models[BOARD] = m
+			task, ok := m.lists[m.focused].SelectedItem().(Task)
+			if !ok {
+				return m, nil
+			}
+			models[FORM] = NewFormWithTask(m.db, m.focused, m.width, m.height, task)
+			return models[FORM].Update(nil)
 		case "n":
 			models[BOARD] = m
 			models[FORM] = NewForm(m.db, m.focused, m.width, m.height)
 			return models[FORM].Update(nil)
 		}
-	case Task:
+	case TaskNew:
 		task := msg
-		err := m.db.InsertTask(task.title, task.description, int(task.status))
+		id, err := m.db.InsertTask(task.title, task.description, int(task.status))
 		if err != nil {
 			log.Fatalf("failed to insert task: %s", err)
 		}
-		return m, m.lists[task.status].InsertItem(0, task)
+		task.id = id
+		return m, m.lists[task.status].InsertItem(task.index, Task(task))
+	case TaskEdit:
+		task := msg
+		err := m.db.UpdateTask(task.id, msg.title, msg.description)
+		if err != nil {
+			log.Fatalf("failed to edit task: %s", err)
+		}
+		return m, m.lists[task.status].SetItem(task.index, Task(msg))
 	}
 
 	var cmd tea.Cmd
@@ -191,7 +230,21 @@ func (m *Board) MoveTask(dir int) tea.Msg {
 		}
 
 		m.lists[m.focused].RemoveItem(selectedIndex)
-		m.lists[selectedTask.status].InsertItem(0, selectedTask)
+		m.lists[selectedTask.status].InsertItem(selectedTask.id, selectedTask)
+	}
+
+	return nil
+}
+
+func (m *Board) EditTask() tea.Msg {
+	selectedTask, ok := m.lists[m.focused].SelectedItem().(Task)
+	if !ok {
+		return ""
+	}
+
+	err := m.db.UpdateTask(selectedTask.id, selectedTask.title, selectedTask.title)
+	if err != nil {
+		log.Fatalf("failed to delete task: %s", err)
 	}
 
 	return nil

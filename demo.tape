@@ -62,7 +62,12 @@ Set FontSize 16
 Set Width 1200
 Set Height 600
 
-Type "go build ." Sleep 500ms  Enter
+Hide
+Type "go build ." Enter
+Sleep 100ms
+Type "clear" Enter
+
+Show
 Type "./kancli" Sleep 500ms  Enter
 Sleep 2s
 Type "n" Sleep 1s
@@ -84,8 +89,14 @@ Sleep 2s
 Type "j" Sleep 500ms Enter
 Sleep 1s
 Type "d"
+Sleep 1s
+Type "n" Sleep 1s
+Type "A tsak with a typo" Enter
+Type "Let's edit this task" Enter
+Sleep 1s
+Type "e" Sleep 1s Backspace 15 Sleep 500ms
+Type "ask without a typo" Enter
+Sleep 1s Enter
 
 Sleep 2s
-Type "q" Sleep 500ms
-Type "clear" Sleep 500ms
 
